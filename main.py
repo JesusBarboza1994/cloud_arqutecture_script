@@ -267,12 +267,57 @@ for _ in range(CANTIDAD_COMPRAS):
     ))
 
 # Insertar ventas y actualizar stock
-for _ in range(CANTIDAD_VENTAS):
+for _ in range(3000):
     cursor.execute("SELECT id_cliente FROM Cliente ORDER BY RAND() LIMIT 1;")
     id_cliente = cursor.fetchone()[0]
     cursor.execute("SELECT cod_producto, precio_unitario FROM Producto ORDER BY RAND() LIMIT 1;")
     cod_producto, precio_unitario = cursor.fetchone()
     cantidad_venta = fake.random_int(min=1, max=50)
+    
+    # Verificar el stock actual
+    cursor.execute("SELECT stock_actual FROM Stock WHERE id_producto = %s;", (cod_producto,))
+    stock_actual = cursor.fetchone()[0]
+    
+    if stock_actual < cantidad_venta:
+        # Realizar una compra para reponer el stock
+        cantidad_compra = cantidad_venta * 2
+        cursor.execute("SELECT id_proveedor FROM Proveedor ORDER BY RAND() LIMIT 1;")
+        id_proveedor = cursor.fetchone()[0]
+        costo_promedio_unitario = round(Decimal(precio_unitario) * Decimal(random.uniform(0.98, 1.02)), 2)
+        monto_compra = costo_promedio_unitario * cantidad_compra
+        fecha_hora = datetime.datetime.now()
+
+        cursor.execute('''
+            INSERT INTO Compra (id_proveedor, cod_producto, cantidad_compra, costo_promedio_unitario, monto_compra, fecha_hora)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (
+            id_proveedor,
+            cod_producto,
+            cantidad_compra,
+            costo_promedio_unitario,
+            monto_compra,
+            fecha_hora
+        ))
+        id_compra = cursor.lastrowid
+
+        # Actualizar el stock del producto
+        cursor.execute("UPDATE Stock SET stock_actual = stock_actual + %s, stock_valorizado = stock_valorizado + %s WHERE id_producto = %s;",
+                       (cantidad_compra, monto_compra, cod_producto))
+
+        # Insertar movimiento de producto
+        cursor.execute('''
+            INSERT INTO Movimiento_producto (fecha_hora, cod_producto, cantidad, id_compra, costo_promedio_unitario, clase)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (
+            fecha_hora,
+            cod_producto,
+            cantidad_compra,
+            id_compra,
+            costo_promedio_unitario,
+            'Ingreso'
+        ))
+
+    # Realizar la venta
     monto_venta = precio_unitario * cantidad_venta
     fecha_hora = datetime.datetime.now()
 
